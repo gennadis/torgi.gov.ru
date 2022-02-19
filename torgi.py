@@ -1,4 +1,5 @@
 import datetime
+import urllib3
 import json
 
 import requests
@@ -34,6 +35,7 @@ def main():
             url=passport_url, verify_ssl=True, filename=PASSPORT_FILENAME
         )
     except requests.exceptions.SSLError:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
         passport_json = fetch_opendata_passport(
             url=passport_url, verify_ssl=False, filename=PASSPORT_FILENAME
         )
