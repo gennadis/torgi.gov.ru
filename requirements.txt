@@ -1,3 +1,2 @@
-beautifulsoup4==4.10.0
-lxml==4.8.0
+django==-4.0.2
 requests==2.27.1
