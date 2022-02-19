@@ -1,3 +1,6 @@
 venv
-*.json
 .DS_Store
+__pycache__
+
+*.json
+*.sqlite3
