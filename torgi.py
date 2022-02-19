@@ -1,11 +1,14 @@
 import datetime
 import urllib3
 import json
+import os
 
 import requests
+from tqdm import tqdm
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
 PASSPORT_FILENAME = "passport.json"
+NOTIFICATIONS_DIRNAME = "notifications"
 
 
 def get_opendata_passport_url(days_count: int) -> str:
@@ -28,17 +31,40 @@ def fetch_opendata_passport(url: str, verify_ssl: bool, filename: str) -> str:
     return filename
 
 
-def main():
-    passport_url = get_opendata_passport_url(days_count=1)
-    try:
-        passport_json = fetch_opendata_passport(
-            url=passport_url, verify_ssl=True, filename=PASSPORT_FILENAME
-        )
-    except requests.exceptions.SSLError:
+def fetch_notification(url: str):
+    response = requests.get(url, verify=False)
+    response.raise_for_status()
+
+    filename = url.split("/")[-1]
+    with open(os.path.join(NOTIFICATIONS_DIRNAME, filename), "w") as file:
+        json.dump(response.json(), file, ensure_ascii=False, indent=2)
+
+
+def fetch_all_notifications(source_filename: str):
+    with open(source_filename, "r") as file:
+        notifications = json.load(file)
+
+    hrefs = [
+        notification["href"]
+        for notification in notifications["listObjects"]
+        if notification["documentType"] == "notice"
+    ]
+
+    for href in tqdm(hrefs):
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        passport_json = fetch_opendata_passport(
-            url=passport_url, verify_ssl=False, filename=PASSPORT_FILENAME
-        )
+        fetch_notification(url=href)
+
+
+def main():
+    os.makedirs("notifications", exist_ok=True)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    passport_url = get_opendata_passport_url(days_count=1)
+    passport_json = fetch_opendata_passport(
+        url=passport_url, verify_ssl=False, filename=PASSPORT_FILENAME
+    )
+
+    fetch_all_notifications(passport_json)
 
 
 if __name__ == "__main__":
