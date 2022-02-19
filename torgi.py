@@ -4,7 +4,11 @@ import json
 import os
 
 import requests
+from dotenv import load_dotenv
 from tqdm import tqdm
+
+from mongo_db_client import save_notice, get_database
+
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
 PASSPORT_FILENAME = "passport.json"
@@ -56,15 +60,28 @@ def fetch_all_notifications(source_filename: str):
 
 
 def main():
+    load_dotenv()
+    atlas_url = os.getenv("ATLAS_DB_URL")
+
+    mongo_client = get_database(atlas_url)
+
     os.makedirs("notifications", exist_ok=True)
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    passport_url = get_opendata_passport_url(days_count=1)
+    # passport_url = get_opendata_passport_url(days_count=1)
+    passport_url = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-20220218T0000-20220219T0000-structure-20220101.json"
     passport_json = fetch_opendata_passport(
         url=passport_url, verify_ssl=False, filename=PASSPORT_FILENAME
     )
 
     fetch_all_notifications(passport_json)
+
+    for file in tqdm(os.listdir(NOTIFICATIONS_DIRNAME)):
+        save_notice(
+            mongo_client,
+            NOTIFICATIONS_DIRNAME,
+            os.path.join(NOTIFICATIONS_DIRNAME, file),
+        )
 
 
 if __name__ == "__main__":
