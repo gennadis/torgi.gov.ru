@@ -36,16 +36,14 @@ def fetch_opendata_passport(url: str, filepath: str, verify_ssl: bool = False) -
     return passport
 
 
-def fetch_notification(url: str, dirpath: str):
+def get_notification(url: str) -> dict:
     response = requests.get(url, verify=False)
     response.raise_for_status()
 
-    filename = get_filename(url)
     notification = response.json()
     clean_notification(notification)
 
-    with open(os.path.join(dirpath, filename), "w") as file:
-        json.dump(notification, file, ensure_ascii=False, indent=2)
+    return notification
 
 
 def fetch_all_notifications(passport: dict, dirpath: str):
@@ -55,9 +53,11 @@ def fetch_all_notifications(passport: dict, dirpath: str):
         if notification["documentType"] == "notice"
     ]
 
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     for url in tqdm(notification_urls):
-        fetch_notification(url, dirpath)
+        notification = get_notification(url)
+        filename = get_filename(url)
+        with open(os.path.join(dirpath, filename), "w") as file:
+            json.dump(notification, fp=file, ensure_ascii=False, indent=2)
 
 
 def clean_notification(notification: dict):
