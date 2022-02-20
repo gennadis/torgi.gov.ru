@@ -40,8 +40,11 @@ def fetch_notification(url: str):
     response.raise_for_status()
 
     filename = url.split("/")[-1]
+    notification = response.json()
+    clean_notification(notification)
+
     with open(os.path.join(NOTIFICATIONS_DIRNAME, filename), "w") as file:
-        json.dump(response.json(), file, ensure_ascii=False, indent=2)
+        json.dump(notification, file, ensure_ascii=False, indent=2)
 
 
 def fetch_all_notifications(source_filename: str):
@@ -59,6 +62,11 @@ def fetch_all_notifications(source_filename: str):
         fetch_notification(url=href)
 
 
+def clean_notification(notification: dict):
+    for attachment in notification["exportObject"]["attachments"]:
+        del attachment["detachedSignature"]
+
+
 def main():
     load_dotenv()
     atlas_url = os.getenv("ATLAS_DB_URL")
@@ -68,8 +76,8 @@ def main():
     os.makedirs("notifications", exist_ok=True)
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    # passport_url = get_opendata_passport_url(days_count=1)
-    passport_url = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-20220218T0000-20220219T0000-structure-20220101.json"
+    passport_url = get_opendata_passport_url(days_count=1)
+    # passport_url = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-20220218T0000-20220219T0000-structure-20220101.json"
     passport_json = fetch_opendata_passport(
         url=passport_url, verify_ssl=False, filename=PASSPORT_FILENAME
     )
