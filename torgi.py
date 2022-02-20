@@ -26,14 +26,15 @@ def get_opendata_passport_url(days_count: int) -> str:
     return passport_url
 
 
-def fetch_opendata_passport(url: str, verify_ssl: bool, filename: str) -> str:
+def fetch_opendata_passport(url: str, filename: str, verify_ssl: bool = False) -> dict:
     response = requests.get(url, verify=verify_ssl)
     response.raise_for_status()
 
+    passport = response.json()
     with open(filename, "w") as file:
-        json.dump(response.json(), file, indent=2)
+        json.dump(passport, file, indent=2)
 
-    return filename
+    return passport
 
 
 def fetch_notification(url: str):
@@ -86,12 +87,9 @@ def main():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     passport_url = get_opendata_passport_url(days_count=1)
-    # passport_url = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-20220218T0000-20220219T0000-structure-20220101.json"
-    passport_json = fetch_opendata_passport(
-        url=passport_url, verify_ssl=False, filename=PASSPORT_FILENAME
-    )
+    passport = fetch_opendata_passport(url=passport_url, filename=PASSPORT_FILENAME)
 
-    fetch_all_notifications(passport_json)
+    fetch_all_notifications(passport)
 
     for file in tqdm(os.listdir(NOTIFICATIONS_DIRNAME)):
         save_notice(
