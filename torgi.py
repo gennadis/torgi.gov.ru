@@ -2,6 +2,7 @@ import datetime
 import urllib3
 import json
 import os
+from urllib.parse import unquote, urlsplit
 
 import requests
 from dotenv import load_dotenv
@@ -39,7 +40,7 @@ def fetch_notification(url: str):
     response = requests.get(url, verify=False)
     response.raise_for_status()
 
-    filename = url.split("/")[-1]
+    filename = get_filename(url)
     notification = response.json()
     clean_notification(notification)
 
@@ -65,6 +66,14 @@ def fetch_all_notifications(source_filename: str):
 def clean_notification(notification: dict):
     for attachment in notification["exportObject"]["attachments"]:
         del attachment["detachedSignature"]
+
+
+def get_filename(url: str) -> str:
+    url_unqoted = unquote(url)
+    _, _, path, _, _ = urlsplit(url_unqoted)
+    _, filename = os.path.split(path)
+
+    return filename
 
 
 def main():
