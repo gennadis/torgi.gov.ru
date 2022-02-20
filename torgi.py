@@ -12,8 +12,8 @@ from mongo_db_client import save_notice, get_database
 
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
-PASSPORT_FILENAME = "passport_{}_{}.json"
-NOTIFICATIONS_DIRNAME = "notifications"
+NOTIFICATIONS_DIRPATH = "notifications/{}_{}/"
+PASSPORT_FILEPATH = "notifications/{}_{}/passport.json"
 DAYS_DELTA = 1
 
 
@@ -25,24 +25,18 @@ def get_dates(days_count: int) -> list:
     return dates
 
 
-def get_opendata_passport_url(past_date: str, current_date: str) -> str:
-    passport_url = OPENDATA_PASSPORT_URL.format(past_date, current_date)
-
-    return passport_url
-
-
-def fetch_opendata_passport(url: str, filename: str, verify_ssl: bool = False) -> dict:
+def fetch_opendata_passport(url: str, filepath: str, verify_ssl: bool = False) -> dict:
     response = requests.get(url, verify=verify_ssl)
     response.raise_for_status()
 
     passport = response.json()
-    with open(filename, "w") as file:
+    with open(filepath, "w") as file:
         json.dump(passport, file, indent=2)
 
     return passport
 
 
-def fetch_notification(url: str):
+def fetch_notification(url: str, dirpath: str):
     response = requests.get(url, verify=False)
     response.raise_for_status()
 
@@ -50,11 +44,11 @@ def fetch_notification(url: str):
     notification = response.json()
     clean_notification(notification)
 
-    with open(os.path.join(NOTIFICATIONS_DIRNAME, filename), "w") as file:
+    with open(os.path.join(dirpath, filename), "w") as file:
         json.dump(notification, file, ensure_ascii=False, indent=2)
 
 
-def fetch_all_notifications(passport: dict):
+def fetch_all_notifications(passport: dict, dirpath: str):
     notification_urls = [
         notification["href"]
         for notification in passport["listObjects"]
@@ -63,7 +57,7 @@ def fetch_all_notifications(passport: dict):
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     for url in tqdm(notification_urls):
-        fetch_notification(url)
+        fetch_notification(url, dirpath)
 
 
 def clean_notification(notification: dict):
@@ -85,22 +79,23 @@ def main():
 
     mongo_client = get_database(atlas_url)
 
-    os.makedirs("notifications", exist_ok=True)
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     yesterday, today = get_dates(DAYS_DELTA)
-    passport_url = get_opendata_passport_url(past_date=yesterday, current_date=today)
-    passport = fetch_opendata_passport(
-        url=passport_url, filename=PASSPORT_FILENAME.format(yesterday, today)
-    )
 
-    fetch_all_notifications(passport)
+    notifications_dirpath = NOTIFICATIONS_DIRPATH.format(yesterday, today)
+    passport_filepath = PASSPORT_FILEPATH.format(yesterday, today)
+    os.makedirs(notifications_dirpath, exist_ok=True)
 
-    for file in tqdm(os.listdir(NOTIFICATIONS_DIRNAME)):
+    passport_url = OPENDATA_PASSPORT_URL.format(yesterday, today)
+    passport = fetch_opendata_passport(url=passport_url, filepath=passport_filepath)
+    fetch_all_notifications(passport=passport, dirpath=notifications_dirpath)
+
+    for notification in tqdm(os.listdir(notifications_dirpath)):
         save_notice(
             mongo_client,
-            NOTIFICATIONS_DIRNAME,
-            os.path.join(NOTIFICATIONS_DIRNAME, file),
+            NOTIFICATIONS_DIRPATH,
+            os.path.join(NOTIFICATIONS_DIRPATH, notification),
         )
 
 
