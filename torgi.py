@@ -12,8 +12,8 @@ from mongo_db_client import save_notice, get_database
 
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
-PASSPORT_FILENAME = "passport.json"
-NOTIFICATIONS_DIRNAME = "notifications"
+PASSPORT_FILENAME = "passport_{}.json"
+NOTIFICATIONS_DIRNAME = "notifications_{}"
 
 
 def get_opendata_passport_url(days_count: int) -> str:
@@ -49,19 +49,16 @@ def fetch_notification(url: str):
         json.dump(notification, file, ensure_ascii=False, indent=2)
 
 
-def fetch_all_notifications(source_filename: str):
-    with open(source_filename, "r") as file:
-        notifications = json.load(file)
-
-    hrefs = [
+def fetch_all_notifications(passport: dict) -> list:
+    notification_urls = [
         notification["href"]
-        for notification in notifications["listObjects"]
+        for notification in passport["listObjects"]
         if notification["documentType"] == "notice"
     ]
 
-    for href in tqdm(hrefs):
-        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-        fetch_notification(url=href)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    for url in tqdm(notification_urls):
+        fetch_notification(url)
 
 
 def clean_notification(notification: dict):
