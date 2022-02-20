@@ -1,7 +1,7 @@
 import datetime
-import urllib3
 import json
 import os
+import urllib3
 from urllib.parse import unquote, urlsplit
 
 import requests
@@ -40,17 +40,16 @@ def get_notification(url: str) -> dict:
     response = requests.get(url, verify=False)
     response.raise_for_status()
 
-    notification = response.json()
-    clean_notification(notification)
+    notification = response.json()["exportObject"]
+    for attachment in notification.get("attachments"):
+        del attachment["detachedSignature"]
 
     return notification
 
 
-def fetch_all_notifications(passport: dict, dirpath: str):
+def fetch_all_notifications(passport: dict, dirpath: str) -> None:
     notification_urls = [
-        notification["href"]
-        for notification in passport["listObjects"]
-        if notification["documentType"] == "notice"
+        notification["href"] for notification in passport["listObjects"]
     ]
 
     for url in tqdm(notification_urls):
@@ -58,11 +57,6 @@ def fetch_all_notifications(passport: dict, dirpath: str):
         filename = get_filename(url)
         with open(os.path.join(dirpath, filename), "w") as file:
             json.dump(notification, fp=file, ensure_ascii=False, indent=2)
-
-
-def clean_notification(notification: dict):
-    for attachment in notification["exportObject"]["attachments"]:
-        del attachment["detachedSignature"]
 
 
 def get_filename(url: str) -> str:
@@ -80,6 +74,7 @@ def main():
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     yesterday, today = get_dates(DAYS_DELTA)
+    # yesterday, today = "20220218", "20220219"
 
     notifications_dirpath = NOTIFICATIONS_DIRPATH.format(yesterday, today)
     passport_filepath = PASSPORT_FILEPATH.format(yesterday, today)
