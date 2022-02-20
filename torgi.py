@@ -15,6 +15,7 @@ OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/dat
 NOTIFICATIONS_DIRPATH = "notifications/{}_{}/"
 PASSPORT_FILEPATH = "notifications/{}_{}/passport.json"
 DAYS_DELTA = 1
+MONGODB_COLLECTION_NAME = "NOTIFICATIONS"
 
 
 def get_dates(days_count: int) -> list:
@@ -85,12 +86,11 @@ def main():
     fetch_all_notifications(passport=passport, dirpath=notifications_dirpath)
 
     mongodb_client = get_database(mongodb_url)
-    collection_name = f"{yesterday} - {today}"
 
     for filename in tqdm(os.listdir(notifications_dirpath)):
         with open(os.path.join(notifications_dirpath, filename), "r") as file:
             notification = json.load(file)
-            save_notification(mongodb_client, collection_name, notification)
+            save_notification(mongodb_client, MONGODB_COLLECTION_NAME, notification)
 
 
 if __name__ == "__main__":
