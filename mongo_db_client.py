@@ -14,11 +14,9 @@ def get_database(mongodb_url: str) -> MongoClient:
     return client["notifications"]
 
 
-def save_to_database(
-    client: MongoClient, collection_name: str, notification: dict
-) -> None:
+def save_to_database(client: MongoClient, collection_name: str, document: dict) -> None:
     collection = client[collection_name]
-    collection.insert_one(notification)
+    collection.insert_one(document)
 
 
 def filter_notifications(db: MongoClient, region_code: str, category_code: str):

@@ -107,9 +107,17 @@ def main():
         filepath = os.path.join(notifications_dirpath, filename)
         with open(filepath, "r") as file:
             notification = json.load(file)
-            save_to_database(mongodb_client, MONGODB_COLLECTION_NAME, notification)
+            save_to_database(
+                client=mongodb_client,
+                collection_name=MONGODB_COLLECTION_NAME,
+                document=notification,
+            )
 
-    save_to_database(mongodb_client, PASSPORTS_COLLECTION_NAME, passport)
+    save_to_database(
+        client=mongodb_client,
+        collection_name=PASSPORTS_COLLECTION_NAME,
+        document=passport,
+    )
     os.remove(PASSPORT_FILEPATH)
 
 
