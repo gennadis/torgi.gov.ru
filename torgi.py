@@ -13,9 +13,12 @@ from mongo_db_client import get_database, save_notification
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
 NOTIFICATIONS_DIRPATH = "notifications/{}_{}/"
-PASSPORT_FILEPATH = "notifications/{}_{}/passport.json"
+PASSPORT_FILEPATH = "notifications/passport.json"
 DAYS_DELTA = 1
-MONGODB_COLLECTION_NAME = "NOTIFICATIONS"
+MONGODB_COLLECTION_NAME = "MOSCOW_APARTAMENTS"
+MOSCOW_REGION_CODE = "77"
+APARTAMENTS_CODE = "9"
+OFFICES_CODE = "11"
 
 
 def get_dates(days_count: int) -> list:
@@ -48,16 +51,29 @@ def get_notification(url: str) -> dict:
     return notification
 
 
-def fetch_all_notifications(passport: dict, dirpath: str) -> None:
+def check_for_apartament_in_moscow(notification: dict) -> bool:
+    lots = notification["structuredObject"]["notice"]["lots"]
+    for lot in lots:
+        if (
+            lot["biddingObjectInfo"]["subjectRF"]["code"] == MOSCOW_REGION_CODE
+            and lot["biddingObjectInfo"]["category"]["code"] == APARTAMENTS_CODE
+        ):
+            return True
+
+
+def fetch_filtered_notifications(passport: dict, dirpath: str) -> None:
     notification_urls = [
-        notification["href"] for notification in passport["listObjects"]
+        notification["href"]
+        for notification in passport["listObjects"]
+        if notification["documentType"] == "notice"
     ]
 
     for url in tqdm(notification_urls):
         notification = get_notification(url)
-        filename = get_filename(url)
-        with open(os.path.join(dirpath, filename), "w") as file:
-            json.dump(notification, fp=file, ensure_ascii=False, indent=2)
+        if check_for_apartament_in_moscow(notification):
+            filename = get_filename(url)
+            with open(os.path.join(dirpath, filename), "w") as file:
+                json.dump(notification, fp=file, ensure_ascii=False, indent=2)
 
 
 def get_filename(url: str) -> str:
@@ -74,23 +90,24 @@ def main():
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
-    yesterday, today = get_dates(DAYS_DELTA)
-    # yesterday, today = "20220218", "20220219"
+    # yesterday, today = get_dates(DAYS_DELTA)
+    yesterday, today = "20220218", "20220219"
 
     notifications_dirpath = NOTIFICATIONS_DIRPATH.format(yesterday, today)
-    passport_filepath = PASSPORT_FILEPATH.format(yesterday, today)
     os.makedirs(notifications_dirpath, exist_ok=True)
 
     passport_url = OPENDATA_PASSPORT_URL.format(yesterday, today)
-    passport = fetch_opendata_passport(url=passport_url, filepath=passport_filepath)
-    fetch_all_notifications(passport=passport, dirpath=notifications_dirpath)
+    passport = fetch_opendata_passport(url=passport_url, filepath=PASSPORT_FILEPATH)
+    fetch_filtered_notifications(passport=passport, dirpath=notifications_dirpath)
 
     mongodb_client = get_database(mongodb_url)
 
     for filename in tqdm(os.listdir(notifications_dirpath)):
-        with open(os.path.join(notifications_dirpath, filename), "r") as file:
+        filepath = os.path.join(notifications_dirpath, filename)
+        with open(filepath, "r") as file:
             notification = json.load(file)
             save_notification(mongodb_client, MONGODB_COLLECTION_NAME, notification)
+    os.remove(PASSPORT_FILEPATH)
 
 
 if __name__ == "__main__":
