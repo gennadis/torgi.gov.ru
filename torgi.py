@@ -1,6 +1,7 @@
 import datetime
 import os
 import urllib3
+from pprint import pprint
 
 import requests
 from dotenv import load_dotenv
@@ -17,6 +18,7 @@ DAYS_DELTA = 1
 VERIFY_SSL = False
 
 MOSCOW_APARTMENTS_COLLECTION = "MOSCOW_APARTMENTS"
+MOSCOW_OFFICES_COLLECTION = "MOSCOW_OFFICES"
 PASSPORTS_COLLECTION = "PASSPORTS"
 
 MOSCOW_REGION_CODE = "77"
@@ -52,28 +54,30 @@ def get_notification(url: str) -> dict:
     return notification
 
 
-def check_for_apartament_in_moscow(notification: dict) -> bool:
+def check_for_category(notification: dict, category_code: str) -> bool:
     lots = notification["structuredObject"]["notice"]["lots"]
     for lot in lots:
         if (
             lot["biddingObjectInfo"]["subjectRF"]["code"] == MOSCOW_REGION_CODE
-            and lot["biddingObjectInfo"]["category"]["code"] == APARTAMENTS_CODE
+            and lot["biddingObjectInfo"]["category"]["code"] == category_code
         ):
             return True
 
 
-def get_filtered_notifications(passport: dict) -> list[dict]:
+def get_filtered_notifications(passport: dict) -> dict[str : list[dict]]:
     notification_urls = [
         notification["href"]
         for notification in passport["listObjects"]
         if notification["documentType"] == "notice"
     ]
 
-    notifications = []
+    notifications = {MOSCOW_APARTMENTS_COLLECTION: [], MOSCOW_OFFICES_COLLECTION: []}
     for url in notification_urls:
         notification = get_notification(url)
-        if check_for_apartament_in_moscow(notification):
-            notifications.append(notification)
+        if check_for_category(notification, category_code=APARTAMENTS_CODE):
+            notifications[MOSCOW_APARTMENTS_COLLECTION].append(notification)
+        if check_for_category(notification, category_code=OFFICES_CODE):
+            notifications[MOSCOW_OFFICES_COLLECTION].append(notification)
 
     return notifications
 
@@ -101,14 +105,15 @@ def main():
     except TypeError as e:
         print(f"Empty passport: {e}")
 
-    try:
-        push_notifications_to_db(
-            client=mongodb_client,
-            collection_name=MOSCOW_APARTMENTS_COLLECTION,
-            documents=filtered_notifications,
-        )
-    except TypeError as e:
-        print(f"No Moscow apartments were found: {e}")
+    for collection, notifications in filtered_notifications.items():
+        try:
+            push_notifications_to_db(
+                client=mongodb_client,
+                collection_name=collection,
+                documents=notifications,
+            )
+        except TypeError as e:
+            print(f"No Moscow apartments were found: {e}")
 
 
 if __name__ == "__main__":
