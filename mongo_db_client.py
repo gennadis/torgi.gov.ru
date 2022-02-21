@@ -5,9 +5,6 @@ from pprint import pprint
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-MOSCOW_REGION_CODE = "77"
-APARTAMENTS_CODE = "9"
-
 
 def get_database(mongodb_url: str) -> MongoClient:
     client = MongoClient(mongodb_url)
@@ -28,15 +25,17 @@ def push_passport_to_db(
     collection.insert_one(document)
 
 
-def filter_notifications(db: MongoClient, region_code: str, category_code: str):
-    region_notifications = db["NOTIFICATIONS"].find(
-        {
-            "structuredObject.notice.lots.biddingObjectInfo.subjectRF.code": region_code,
-            "structuredObject.notice.lots.biddingObjectInfo.category.code": category_code,
-        }
-    )
+def get_notification_summary(apartment: dict):
+    link = apartment["structuredObject"]["notice"]["commonInfo"]["href"]
+    lots = apartment["structuredObject"]["notice"]["lots"]
 
-    return region_notifications
+    lots_summary = []
+    for lot in lots:
+        lot_price = locale.currency(float(lot["priceMin"]), grouping=True)
+        lot_description = lot["lotDescription"]
+        lots_summary.append((lot_description, lot_price))
+
+    return {"link": link, "lots_summary": lots_summary}
 
 
 def main():
@@ -44,17 +43,17 @@ def main():
 
     load_dotenv()
     mongodb_url = os.getenv("MONGODB_URL")
+    mongodb_client = get_database(mongodb_url)
 
-    db = get_database(mongodb_url)
-    apartaments = list(db["MOSCOW_APARTAMENTS"].find())
-    for notification in apartaments:
-        print(notification["structuredObject"]["notice"]["commonInfo"]["href"])
-        lots = notification["structuredObject"]["notice"]["lots"]
-        for lot in lots:
-            price = locale.currency(float(lot["priceMin"]), grouping=True)
-            print(price)
-            print(lot["lotDescription"])
-        print("-------------")
+    apartments = mongodb_client["moscow_apartments"].find()
+    for apartment in apartments:
+        pprint(get_notification_summary(apartment))
+
+    print("--------------------------------")
+
+    offices = mongodb_client["moscow_offices"].find()
+    for office in offices:
+        pprint(get_notification_summary(office))
 
 
 if __name__ == "__main__":
