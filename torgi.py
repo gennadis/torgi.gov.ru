@@ -1,4 +1,5 @@
 import datetime
+import logging
 import os
 import urllib3
 from time import sleep
@@ -7,11 +8,7 @@ import requests
 from dotenv import load_dotenv
 from pymongo import MongoClient
 
-from mongo_db_client import (
-    get_database,
-    push_notifications_to_db,
-    push_passport_to_db,
-)
+from mongo_db_client import get_database, push_notifications_to_db, push_passport_to_db
 
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
@@ -66,6 +63,8 @@ def check_for_category(notification: dict, category_code: str) -> bool:
         ):
             return True
 
+    return False
+
 
 def get_filtered_notifications(passport: dict) -> dict[str : list[dict]]:
     notification_urls = [
@@ -81,15 +80,19 @@ def get_filtered_notifications(passport: dict) -> dict[str : list[dict]]:
 
     for url in notification_urls:
         notification = get_notification(url)
+
         if check_for_category(notification, category_code=APARTAMENTS_CODE):
             notifications[MOSCOW_APARTMENTS_COLLECTION].append(notification)
+
         if check_for_category(notification, category_code=OFFICES_CODE):
             notifications[MOSCOW_OFFICES_COLLECTION].append(notification)
 
     return notifications
 
 
-def run_parser(mongodb_client: MongoClient, sleep_interval: int):
+def run_parser(mongodb_client: MongoClient, sleep_interval: int) -> None:
+    logging.info("Start parser")
+
     yesterday, today = get_dates(DAYS_DELTA)
 
     passport_url = OPENDATA_PASSPORT_URL.format(yesterday, today)
@@ -103,7 +106,7 @@ def run_parser(mongodb_client: MongoClient, sleep_interval: int):
             document=passport,
         )
     except TypeError:
-        print(f"Empty passport")
+        logging.error(f"Empty passport.", exc_info=True)
 
     for collection, notifications in filtered_notifications.items():
         try:
@@ -113,12 +116,14 @@ def run_parser(mongodb_client: MongoClient, sleep_interval: int):
                 documents=notifications,
             )
         except TypeError:
-            print(f"No {collection} objects were found.")
+            logging.error(f"No {collection} objects were found.", exc_info=True)
 
     sleep(sleep_interval)
 
 
 def main():
+    logging.basicConfig(filename="parser.log", filemode="w", level=logging.INFO)
+
     load_dotenv()
     mongodb_url = os.getenv("MONGODB_URL")
     mongodb_client = get_database(mongodb_url)
