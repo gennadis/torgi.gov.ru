@@ -1,10 +1,11 @@
 import datetime
 import os
 import urllib3
-from pprint import pprint
+from time import sleep
 
 import requests
 from dotenv import load_dotenv
+from pymongo import MongoClient
 
 from mongo_db_client import (
     get_database,
@@ -17,13 +18,15 @@ OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/dat
 DAYS_DELTA = 1
 VERIFY_SSL = False
 
-MOSCOW_APARTMENTS_COLLECTION = "MOSCOW_APARTMENTS"
-MOSCOW_OFFICES_COLLECTION = "MOSCOW_OFFICES"
-PASSPORTS_COLLECTION = "PASSPORTS"
+MOSCOW_APARTMENTS_COLLECTION = "moscow_apartments"
+MOSCOW_OFFICES_COLLECTION = "moscow_offices"
+PASSPORTS_COLLECTION = "passports"
 
 MOSCOW_REGION_CODE = "77"
 APARTAMENTS_CODE = "9"
 OFFICES_CODE = "11"
+
+PARSER_SLEEP_INTERVAL = 86400
 
 
 def get_dates(days_count: int) -> list:
@@ -71,7 +74,11 @@ def get_filtered_notifications(passport: dict) -> dict[str : list[dict]]:
         if notification["documentType"] == "notice"
     ]
 
-    notifications = {MOSCOW_APARTMENTS_COLLECTION: [], MOSCOW_OFFICES_COLLECTION: []}
+    notifications = {
+        MOSCOW_APARTMENTS_COLLECTION: [],
+        MOSCOW_OFFICES_COLLECTION: [],
+    }
+
     for url in notification_urls:
         notification = get_notification(url)
         if check_for_category(notification, category_code=APARTAMENTS_CODE):
@@ -82,15 +89,8 @@ def get_filtered_notifications(passport: dict) -> dict[str : list[dict]]:
     return notifications
 
 
-def main():
-    load_dotenv()
-    mongodb_url = os.getenv("MONGODB_URL")
-    mongodb_client = get_database(mongodb_url)
-
-    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
-    # yesterday, today = get_dates(DAYS_DELTA)
-    yesterday, today = "20220218", "20220219"
+def run_parser(mongodb_client: MongoClient, sleep_interval: int):
+    yesterday, today = get_dates(DAYS_DELTA)
 
     passport_url = OPENDATA_PASSPORT_URL.format(yesterday, today)
     passport = fetch_opendata_passport(url=passport_url)
@@ -102,8 +102,8 @@ def main():
             collection_name=PASSPORTS_COLLECTION,
             document=passport,
         )
-    except TypeError as e:
-        print(f"Empty passport: {e}")
+    except TypeError:
+        print(f"Empty passport")
 
     for collection, notifications in filtered_notifications.items():
         try:
@@ -112,8 +112,21 @@ def main():
                 collection_name=collection,
                 documents=notifications,
             )
-        except TypeError as e:
-            print(f"No Moscow apartments were found: {e}")
+        except TypeError:
+            print(f"No {collection} objects were found.")
+
+    sleep(sleep_interval)
+
+
+def main():
+    load_dotenv()
+    mongodb_url = os.getenv("MONGODB_URL")
+    mongodb_client = get_database(mongodb_url)
+
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
+    while True:
+        run_parser(mongodb_client, PARSER_SLEEP_INTERVAL)
 
 
 if __name__ == "__main__":
