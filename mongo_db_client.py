@@ -33,7 +33,7 @@ def get_notification_summary(apartment: dict):
     for lot in lots:
         lot_price = locale.currency(float(lot["priceMin"]), grouping=True)
         lot_description = lot["lotDescription"]
-        lots_summary.append((lot_description, lot_price))
+        lots_summary.append((lot_price, lot_description))
 
     return {"link": link, "lots_summary": lots_summary}
 
