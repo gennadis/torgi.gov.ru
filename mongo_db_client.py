@@ -39,11 +39,8 @@ def main():
     mongodb_url = os.getenv("MONGODB_URL")
 
     db = get_database(mongodb_url)
-
-    moscow_notifications = filter_notifications(
-        db, region_code=MOSCOW_REGION_CODE, category_code=APARTAMENTS_CODE
-    )
-    for notification in list(moscow_notifications):
+    apartaments = list(db["MOSCOW_APARTAMENTS"].find())
+    for notification in apartaments:
         print(notification["structuredObject"]["notice"]["commonInfo"]["href"])
         lots = notification["structuredObject"]["notice"]["lots"]
         for lot in lots:
