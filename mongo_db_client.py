@@ -14,7 +14,7 @@ def get_database(mongodb_url: str) -> MongoClient:
     return client["notifications"]
 
 
-def save_notification(
+def save_to_database(
     client: MongoClient, collection_name: str, notification: dict
 ) -> None:
     collection = client[collection_name]
