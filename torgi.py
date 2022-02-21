@@ -1,22 +1,24 @@
 import datetime
-import json
 import os
 import urllib3
-from urllib.parse import unquote, urlsplit
 
 import requests
 from dotenv import load_dotenv
-from tqdm import tqdm
 
-from mongo_db_client import get_database, save_to_database
+from mongo_db_client import (
+    get_database,
+    push_notifications_to_db,
+    push_passport_to_db,
+)
 
 
 OPENDATA_PASSPORT_URL = "https://torgi.gov.ru/new/opendata/7710568760-notice/data-{}T0000-{}T0000-structure-20220101.json"
-NOTIFICATIONS_DIRPATH = "notifications/{}_{}/"
-PASSPORT_FILEPATH = "notifications/passport.json"
 DAYS_DELTA = 1
-MONGODB_COLLECTION_NAME = "MOSCOW_APARTAMENTS"
-PASSPORTS_COLLECTION_NAME = "PASSPORTS"
+VERIFY_SSL = False
+
+MOSCOW_APARTMENTS_COLLECTION = "MOSCOW_APARTMENTS"
+PASSPORTS_COLLECTION = "PASSPORTS"
+
 MOSCOW_REGION_CODE = "77"
 APARTAMENTS_CODE = "9"
 OFFICES_CODE = "11"
@@ -30,19 +32,17 @@ def get_dates(days_count: int) -> list:
     return dates
 
 
-def fetch_opendata_passport(url: str, filepath: str, verify_ssl: bool = False) -> dict:
-    response = requests.get(url, verify=verify_ssl)
+def fetch_opendata_passport(url: str) -> dict:
+    response = requests.get(url, verify=VERIFY_SSL)
     response.raise_for_status()
 
     passport = response.json()
-    with open(filepath, "w") as file:
-        json.dump(passport, file, indent=2)
 
     return passport
 
 
 def get_notification(url: str) -> dict:
-    response = requests.get(url, verify=False)
+    response = requests.get(url, verify=VERIFY_SSL)
     response.raise_for_status()
 
     notification = response.json()["exportObject"]
@@ -62,63 +62,53 @@ def check_for_apartament_in_moscow(notification: dict) -> bool:
             return True
 
 
-def fetch_filtered_notifications(passport: dict, dirpath: str) -> None:
+def get_filtered_notifications(passport: dict) -> list[dict]:
     notification_urls = [
         notification["href"]
         for notification in passport["listObjects"]
         if notification["documentType"] == "notice"
     ]
 
-    for url in tqdm(notification_urls):
+    notifications = []
+    for url in notification_urls:
         notification = get_notification(url)
         if check_for_apartament_in_moscow(notification):
-            filename = get_filename(url)
-            with open(os.path.join(dirpath, filename), "w") as file:
-                json.dump(notification, fp=file, ensure_ascii=False, indent=2)
+            notifications.append(notification)
 
-
-def get_filename(url: str) -> str:
-    url_unqoted = unquote(url)
-    _, _, path, _, _ = urlsplit(url_unqoted)
-    _, filename = os.path.split(path)
-
-    return filename
+    return notifications
 
 
 def main():
     load_dotenv()
     mongodb_url = os.getenv("MONGODB_URL")
+    mongodb_client = get_database(mongodb_url)
 
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # yesterday, today = get_dates(DAYS_DELTA)
-    yesterday, today = "20220217", "20220218"
-
-    notifications_dirpath = NOTIFICATIONS_DIRPATH.format(yesterday, today)
-    os.makedirs(notifications_dirpath, exist_ok=True)
+    yesterday, today = "20220218", "20220219"
 
     passport_url = OPENDATA_PASSPORT_URL.format(yesterday, today)
-    passport = fetch_opendata_passport(url=passport_url, filepath=PASSPORT_FILEPATH)
-    fetch_filtered_notifications(passport=passport, dirpath=notifications_dirpath)
+    passport = fetch_opendata_passport(url=passport_url)
+    filtered_notifications = get_filtered_notifications(passport=passport)
 
-    mongodb_client = get_database(mongodb_url)
+    try:
+        push_passport_to_db(
+            client=mongodb_client,
+            collection_name=PASSPORTS_COLLECTION,
+            document=passport,
+        )
+    except TypeError as e:
+        print(f"Empty passport: {e}")
 
-    for filename in tqdm(os.listdir(notifications_dirpath)):
-        filepath = os.path.join(notifications_dirpath, filename)
-        with open(filepath, "r") as file:
-            notification = json.load(file)
-            save_to_database(
-                client=mongodb_client,
-                collection_name=MONGODB_COLLECTION_NAME,
-                document=notification,
-            )
-
-    save_to_database(
-        client=mongodb_client,
-        collection_name=PASSPORTS_COLLECTION_NAME,
-        document=passport,
-    )
-    os.remove(PASSPORT_FILEPATH)
+    try:
+        push_notifications_to_db(
+            client=mongodb_client,
+            collection_name=MOSCOW_APARTMENTS_COLLECTION,
+            documents=filtered_notifications,
+        )
+    except TypeError as e:
+        print(f"No Moscow apartments were found: {e}")
 
 
 if __name__ == "__main__":

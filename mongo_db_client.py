@@ -14,7 +14,16 @@ def get_database(mongodb_url: str) -> MongoClient:
     return client["notifications"]
 
 
-def save_to_database(client: MongoClient, collection_name: str, document: dict) -> None:
+def push_notifications_to_db(
+    client: MongoClient, collection_name: str, documents: list[dict]
+) -> None:
+    collection = client[collection_name]
+    collection.insert_many(documents)
+
+
+def push_passport_to_db(
+    client: MongoClient, collection_name: str, document: dict
+) -> None:
     collection = client[collection_name]
     collection.insert_one(document)
 
