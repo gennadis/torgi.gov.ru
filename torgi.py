@@ -91,13 +91,19 @@ def get_filtered_notifications(passport: dict) -> dict[str : list[dict]]:
 
 
 def run_parser(mongodb_client: MongoClient, sleep_interval: int) -> None:
-    logging.info("Start parser")
+    logging.info("Parsing started")
 
-    yesterday, today = get_dates(DAYS_DELTA)
+    # yesterday, today = get_dates(DAYS_DELTA)
+    yesterday, today = "20220218", "20220219"
 
     passport_url = OPENDATA_PASSPORT_URL.format(yesterday, today)
     passport = fetch_opendata_passport(url=passport_url)
+    logging.info("Passport fetched")
+
     filtered_notifications = get_filtered_notifications(passport=passport)
+
+    notifications_count = sum([len(value) for value in filtered_notifications.values()])
+    logging.info(f"{notifications_count} notifications fetched")
 
     try:
         push_passport_to_db(
@@ -106,7 +112,7 @@ def run_parser(mongodb_client: MongoClient, sleep_interval: int) -> None:
             document=passport,
         )
     except TypeError:
-        logging.error(f"Empty passport.", exc_info=True)
+        logging.error(f"Empty passport!", exc_info=True)
 
     for collection, notifications in filtered_notifications.items():
         try:
@@ -115,14 +121,19 @@ def run_parser(mongodb_client: MongoClient, sleep_interval: int) -> None:
                 collection_name=collection,
                 documents=notifications,
             )
+            logging.info(
+                f"{len(notifications)} notifications pushed in {collection} collection"
+            )
+
         except TypeError:
             logging.error(f"No {collection} objects were found.", exc_info=True)
 
+    logging.info("Parsing finished. Going back to sleep.")
     sleep(sleep_interval)
 
 
 def main():
-    logging.basicConfig(filename="parser.log", filemode="w", level=logging.INFO)
+    logging.basicConfig(filename="parser.log", filemode="a", level=logging.INFO)
 
     load_dotenv()
     mongodb_url = os.getenv("MONGODB_URL")
